@@ -13,21 +13,12 @@ void setup() {
 void loop() {
   int i;
   int td = 5000;
-  int ns = 126;
-  for(i = 0; i < 255; i++){
-    MA1_Forward(255 - i);//Motor MA1 forward; PWM speed control
-    printf(255-i);
-    delay(5000/126);
+  int ns = 255;
+  for(i = 0; i < nd; i++){
+    MA1_Forward(nd - i);//Motor MA1 forward; PWM speed control
+    delay(td/ns);
   }
-  
-  for(i = 0; i < 255; i++){
-    MA2_Backward(255 - i);//Motor MA1 forward; PWM speed control
-    printf(255-i);
-    delay(10000/126);
-  }
-  MA1_Forward(0);
-  delay(1000);
-  //MA2_Backward(200);//Motor MA1 backward; PWM speed control
+  00);//Motor MA1 backward; PWM speed control
   //delay(1000);
 }
 void MA1_F_Fast(int Speed1) //fast decay; Speed = High duty-cycle
