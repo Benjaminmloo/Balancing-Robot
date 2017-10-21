@@ -11,24 +11,27 @@ void setup() {
 }
 
 void loop() {
-  fullTestLoop();
-}
-
-
-void fullTestLoop()
-{
   int i;
   int td = 5000;
   int ns = 255;
 
+  
+  digitalWrite(IA1, HIGH);
+  digitalWrite(IA2, LOW);
+  delay(1000);
+  
   for (i = 0; i < ns; i++) {
     MA_F_Fast(ns - i);//Motor MA1 forward; PWM speed control
     delay(td / ns);
   }
   digitalWrite(IA1, LOW);
   digitalWrite(IA2, LOW);
-  delay(td / 5);
+  delay(1000);
 
+  
+  digitalWrite(IA1, HIGH);
+  digitalWrite(IA2, LOW);
+  delay(1000);
   for (i = 0; i < ns; i++) {
     MA_F_Slow(ns - 1);//Motor MA1 forward; PWM speed control
     delay(td / ns);
@@ -36,59 +39,43 @@ void fullTestLoop()
 
   digitalWrite(IA1, LOW);
   digitalWrite(IA2, LOW);
-  delay(td / 5);
+  delay(500);
+  
+//  
+//  for (i = 0; i < ns; i++) {
+//    MA_R_Fast(ns - i);//Motor MA1 forward; PWM speed control
+//    delay(td / ns);
+//  }
 
-
-
-  for (i = 0; i < ns; i++) {
-    MA_R_Fast(ns - i);//Motor MA1 forward; PWM speed control
-    delay(td / ns);
-  }
-
-  digitalWrite(IA1, LOW);
-  digitalWrite(IA2, LOW);
-  delay(td / 5);
-
-  for (i = 0; i < ns; i++) {
-    MA_R_Slow(ns - i);//Motor MA1 forward; PWM speed control
-    delay(td / ns);
-  }
-
-  digitalWrite(IA1, LOW);
-  digitalWrite(IA2, LOW);
-  delay(td / 5);
-
-  for (i = 0; i < ns; i++) {
-    MB_F_Fast(ns - i);//Motor MA1 forward; PWM speed control
-    delay(td / ns);
-  }
-  digitalWrite(IA1, LOW);
-  digitalWrite(IA2, LOW);
-  delay(td / 5);
-
-  for (i = 0; i < ns; i++) {
-    MB_F_Slow(ns - i);//Motor MA1 forward; PWM speed control
-    delay(td / ns);
-  }
-  digitalWrite(IB1, LOW);
-  digitalWrite(IB2, LOW);
-  delay(td / 5);
-
-  for (i = 0; i < ns; i++) {
-    MB_R_Fast(ns - i);//Motor MA1 forward; PWM speed control
-    delay(td / ns);
-  }
-  digitalWrite(IB1, LOW);
-  digitalWrite(IB2, LOW);
-  delay(td / 5);
-
-  for (i = 0; i < ns; i++) {
-    MB_R_Slow(ns - i);//Motor MA1 forward; PWM speed control
-    delay(td / ns);
-  }
-  digitalWrite(IB1, LOW);
-  digitalWrite(IB2, LOW);
-  delay(td / 5);
+//  digitalWrite(IA1, LOW);
+//  digitalWrite(IA2, LOW);
+//  delay(500);
+//  
+//  for (i = 0; i < ns; i++) {
+//    MA_R_Slow(ns - i);//Motor MA1 forward; PWM speed control
+//    delay(td / ns);
+//  }
+//
+//  digitalWrite(IA1, LOW);
+//  digitalWrite(IA2, LOW);
+//  delay(500);
+  
+//  for (i = 0; i < ns; i++) {
+//    MB_F_Fast(ns - i);//Motor MA1 forward; PWM speed control
+//    delay(td / ns);
+//  }
+//  for (i = 0; i < ns; i++) {
+//    MB_F_Slow(ns - i);//Motor MA1 forward; PWM speed control
+//    delay(td / ns);
+//  }
+//  for (i = 0; i < ns; i++) {
+//    MB_R_Fast(ns - i);//Motor MA1 forward; PWM speed control
+//    delay(td / ns);
+//  }
+//  for (i = 0; i < ns; i++) {
+//    MB_R_Slow(ns - i);//Motor MA1 forward; PWM speed control
+//    delay(td / ns);
+//  }
 }
 void MA_F_Fast(int Speed1) //fast decay; Speed = High duty-cycle
 {
@@ -125,8 +112,8 @@ void MA_R_Fast(int Speed1) //fast decay; Speed = High duty-cycle
 void MA_R_Slow(int Speed1) //slow decay; Speed = Low duty-cycle
 {
   int Speed2 = 255 - Speed1;
-  digitalWrite(IA2, HIGH);
-  analogWrite(IA1, Speed2 );
+  analogWrite(IA2, HIGH);
+  digitalWrite(IA1, Speed2 );
 }
 
 void MB_R_Fast(int Speed1) //fast decay; Speed = High duty-cycle
@@ -138,6 +125,6 @@ void MB_R_Fast(int Speed1) //fast decay; Speed = High duty-cycle
 void MB_R_Slow(int Speed1) //slow decay; Speed = Low duty-cycle
 {
   int Speed2 = 255 - Speed1;
-  digitalWrite(IB2, HIGH);
-  analogWrite(IB1, Speed2);
+  analogWrite(IB2, HIGH);
+  digitalWrite(IB1, Speed2);
 }
