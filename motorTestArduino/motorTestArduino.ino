@@ -18,7 +18,7 @@ void loop() {
 void fullTestLoop()
 {
   int i;
-  int td = 5000;
+  int td = 10000;
   int ns = 255;
 
   for (i = 0; i < ns; i++) {
