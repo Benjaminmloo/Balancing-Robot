@@ -5,37 +5,42 @@
 
 #define RANGE	100
 #define INITIAL_VALUE 0
+int a1 = 23;
+int a2 = 24;
+int b1 = 28;
+int b2 = 29;
+
 
 void init_motors()
 {
   wiringPiSetup();
 
   // initialize left motor (pin0, 2 & 3)
-  softPwmCreate(0, INITIAL_VALUE, RANGE);
-  softPwmCreate(2, INITIAL_VALUE, RANGE);
+  softPwmCreate(a1, INITIAL_VALUE, RANGE);
+  softPwmCreate(a2, INITIAL_VALUE, RANGE);
   pinMode(3, OUTPUT);
   digitalWrite(3, HIGH);
 
   // initialize right motor (pin4, 5 & 6)
-  softPwmCreate(5, INITIAL_VALUE, RANGE);
-  softPwmCreate(4, INITIAL_VALUE, RANGE);
+  softPwmCreate(b1, INITIAL_VALUE, RANGE);
+  softPwmCreate(b2, INITIAL_VALUE, RANGE);
   pinMode(6, OUTPUT);
   digitalWrite(6, HIGH);
 }
 
 void stop_motors()
 {
-  pinMode(0, OUTPUT);
-  pinMode(2, OUTPUT);
+  pinMode(a1, OUTPUT);
+  pinMode(a2, OUTPUT);
   pinMode(3, OUTPUT);
-  digitalWrite(0, LOW);
-  digitalWrite(2, LOW);
+  digitalWrite(a1, LOW);
+  digitalWrite(a2, LOW);
 
-  pinMode(5, OUTPUT);
-  pinMode(4, OUTPUT);
+  pinMode(b1, OUTPUT);
+  pinMode(b2, OUTPUT);
   pinMode(6, OUTPUT);
-  digitalWrite(5, LOW);
-  digitalWrite(4, LOW);
+  digitalWrite(b1, LOW);
+  digitalWrite(b2, LOW);
 
 //  printf("motor stopped!!\n");
 
@@ -62,24 +67,24 @@ void motors(double speed, double left_offset, double right_offset)
 
   // left motor
   if (left_speed < 0)  {
-    softPwmWrite(0, (int) -left_speed);
-    softPwmWrite(2, 0);
+    softPwmWrite(a1, (int) -left_speed);
+    softPwmWrite(a2, 0);
   }
   else
   if (left_speed > 0)  {
-    softPwmWrite(2, (int) left_speed);
-    softPwmWrite(0, 0);
+    softPwmWrite(a2, (int) left_speed);
+    softPwmWrite(a1, 0);
   }
 
   // right motor
   if (right_speed < 0)  {
-    softPwmWrite(5, (int) -right_speed);
-    softPwmWrite(4, 0);
+    softPwmWrite(b1, (int) -right_speed);
+    softPwmWrite(b2, 0);
   }
   else
   if (right_speed > 0)  {
-    softPwmWrite(4, (int) right_speed);
-    softPwmWrite(5, 0);
+    softPwmWrite(b2, (int) right_speed);
+    softPwmWrite(b1, 0);
   }
 }
 

@@ -1,3 +1,5 @@
+gcc -o mySegway ./mySegway.c ./motors.c  -lwiringPi -lpthread -lm
+gcc -o mySegway ./mySegway.c ./motors.c  -lwiringPi -lpthread -lm
 # mySegway
 This is the control code of the segway 
 
