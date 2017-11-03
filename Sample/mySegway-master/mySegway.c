@@ -7,14 +7,14 @@
 
 // PID parameters
 double Kp = 2.5;   // 2.5
-double Ki = 0.8;   // 1.0
+double Ki = 0.2;   // 1.0
 double Kd = 8.0;   // 8.0
 double K  = 1.9*1.12;
 
 
 // Complimentary Filter parameters
-double K0 = (double) 0.98;
-double K1 = (double) 0.02;
+double K0 = (double) 0.40;
+double K1 = (double) 0.60;
 
 int fd;
 int acclX, acclY, acclZ;
@@ -105,14 +105,14 @@ double GUARD_GAIN = 100.0;
 double error, last_error, integrated_error;
 double pTerm, iTerm, dTerm;
 double angle;
-double angle_offset = 2.0;  //1.5
+double angle_offset = 0;  //1.5
 
 double speed;
 
 
 void pid()
 {
-  error = last_y - angle_offset;
+  error = last_x - angle_offset;
 
   pTerm = Kp * error;
 
@@ -131,7 +131,11 @@ int main()
   init_motors();
   delay(200);
 
+  FILE * fp;
+  fp = fopen("mysegwayLOG.txt", "a+");
   fd = wiringPiI2CSetup (0x68);
+
+
   wiringPiI2CWriteReg8 (fd,0x6B,0x00);//disable sleep mode 
 //  printf("set 0x6B=%X\n",wiringPiI2CReadReg8 (fd,0x6B));
 
@@ -183,7 +187,9 @@ int main()
       stop_motors();
 
     pid();
-    printf("%lf\t%lf\t%lf\t%lf\t%lf\n", error, speed, pTerm, iTerm, dTerm);
+    
+    fprintf(stdout, "%llu, %lf,%lf, %lf, %lf, %lf\n",timer,  error, speed, pTerm, iTerm, dTerm);
+    fprintf(fp, "%llu, %lf,%lf, %lf, %lf, %lf\n",timer,  error, speed, pTerm, iTerm, dTerm);
 
     motors(speed, 0.0, 0.0);
     
