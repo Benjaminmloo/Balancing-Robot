@@ -8,10 +8,10 @@ const int RANGE = 100;
 const int INITIAL_VALUE = 0;
 
 // Motor pins
-int a1 = 1;
-int a2 = 2;
-int b1 = 3;
-int b2 = 4;
+int a1 = 18;
+int a2 = 19;
+int b1 = 20;
+int b2 = 21;
 
 double left_speed;
 double right_speed;
@@ -46,7 +46,7 @@ double pTerm, iTerm, dTerm;
 double angle;
 double angle_offset = 0;  //1.5
 
-double speed;
+double speeds;
 
 unsigned long timer, t, deltaT;
 
@@ -96,7 +96,8 @@ void read_all()
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x3B);
   Wire.endTransmission(false);
-
+  Wire.requestFrom(MPU_ADDR, 14, true); // request a total of 14 registers
+  
   acclX = Wire.read() << 8 | Wire.read();
   acclY = Wire.read() << 8 | Wire.read();
   acclZ = Wire.read() << 8 | Wire.read();
@@ -118,7 +119,7 @@ void read_all()
 }
 
 
-void motors(double speed, double left_offset, double right_offset)
+void motors(double speeds, double left_offset, double right_offset)
 {
 
   // to come to me, drive pin 0&5 to some power
@@ -129,8 +130,8 @@ void motors(double speed, double left_offset, double right_offset)
   // put M+ high & M- low will come to me
   // put M+ low & M- High will away from me
 
-  left_speed = speed + left_offset;
-  right_speed = speed + right_offset;
+  left_speed = speeds + left_offset;
+  right_speed = speeds + right_offset;
 
   // left motor
   if (left_speed < 0)  {
@@ -165,7 +166,7 @@ void pid()
   dTerm = Kd * (error - last_error);
   last_error = error;
 
-  speed = constrain(K * (pTerm + iTerm + dTerm), -GUARD_GAIN, GUARD_GAIN);
+  speeds = constrain(K * (pTerm + iTerm + dTerm), -GUARD_GAIN, GUARD_GAIN);
 
 }
 
@@ -176,7 +177,7 @@ void setup() {
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x6B);
   Wire.write(0);
-  Wire.endTransmission(MPU_ADDR);
+  Wire.endTransmission(true);
 
   init_motors();
 
@@ -197,6 +198,9 @@ void setup() {
   gyro_total_x = last_x - gyro_offset_x;
   gyro_total_y = last_y - gyro_offset_y;
 }
+
+int i;
+char buffer[100];
 
 void loop() {
   t = millis();
@@ -231,9 +235,12 @@ void loop() {
 
   pid();
 
-  fprintf(stdout, "%llu, %lf,%lf, %lf, %lf, %lf\n", timer,  error, speed, pTerm, iTerm, dTerm);
-
-  motors(speed, 0.0, 0.0);
+//  i = sprintf(buffer, "%llu, %lf,%lf, %lf, %lf, %lf\n", timer,  error, speeds, pTerm, iTerm, dTerm);
+//
+//  for(int l = 0; l <= i; l++)
+//    Serial.print(buffer[l]);
+  Serial.print(String(speeds, DEC) +"\n");  
+  motors(speeds, 0.0, 0.0);
 
   delay(10);
 }
