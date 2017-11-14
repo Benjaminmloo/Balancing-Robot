@@ -4,13 +4,14 @@
 
 const int MPU_ADDR = 0x68;
 
-const int RANGE = 100;
+const int SIGNAL_MAX = 255;
+const int SIGNAL_MIN = 100;
 const int INITIAL_VALUE = 0;
 
 // Motor pins
-int a1 = 18;
-int a2 = 19;
-int b1 = 20;
+int a1 = 5;
+int a2 = 6;
+int b1 = 10;
 int b2 = 21;
 
 double left_speed;
@@ -46,7 +47,9 @@ double pTerm, iTerm, dTerm;
 double angle;
 double angle_offset = 0;  //1.5
 
-double speeds;
+double speed;
+double pid_out;
+double dir;
 
 unsigned long timer, t, deltaT;
 
@@ -119,7 +122,7 @@ void read_all()
 }
 
 
-void motors(double speeds, double left_offset, double right_offset)
+void motors(double speed, double left_offset, double right_offset)
 {
 
   // to come to me, drive pin 0&5 to some power
@@ -130,8 +133,8 @@ void motors(double speeds, double left_offset, double right_offset)
   // put M+ high & M- low will come to me
   // put M+ low & M- High will away from me
 
-  left_speed = speeds + left_offset;
-  right_speed = speeds + right_offset;
+  left_speed = speed + left_offset;
+  right_speed = speed + right_offset;
 
   // left motor
   if (left_speed < 0)  {
@@ -165,9 +168,21 @@ void pid()
 
   dTerm = Kd * (error - last_error);
   last_error = error;
+  
+  pid_out = K * (pTerm + iTerm + dTerm);
+  dir = pid_out / abs(pid_out);
 
-  speeds = constrain(K * (pTerm + iTerm + dTerm), -GUARD_GAIN, GUARD_GAIN);
-
+  if(abs(pid_out) < 30)
+  {
+    speed = 0;   
+  }else if(pid_out > 0)
+  {
+    speed = constrain(pid_out, SIGNAL_MIN, SIGNAL_MAX);
+  }else if(pid_out < 0)
+  {
+    speed = constrain(pid_out, -SIGNAL_MAX, -SIGNAL_MIN);
+  }
+  
 }
 
 void setup() {
@@ -235,12 +250,12 @@ void loop() {
 
   pid();
 
-//  i = sprintf(buffer, "%llu, %lf,%lf, %lf, %lf, %lf\n", timer,  error, speeds, pTerm, iTerm, dTerm);
+//  i = sprintf(buffer, "%llu, %lf,%lf, %lf, %lf, %lf\n", timer,  error, speed, pTerm, iTerm, dTerm);
 //
 //  for(int l = 0; l <= i; l++)
 //    Serial.print(buffer[l]);
-  Serial.print(String(speeds, DEC) +"\n");  
-  motors(speeds, 0.0, 0.0);
+  Serial.print(String(speed, DEC) +"\n");  
+  motors(speed, 0.0, 0.0);
 
   delay(10);
 }
