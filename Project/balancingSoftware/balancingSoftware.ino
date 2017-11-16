@@ -12,7 +12,7 @@ const int INITIAL_VALUE = 0;
 int a1 = 5;
 int a2 = 6;
 int b1 = 10;
-int b2 = 21;
+int b2 = 11;
 
 double left_speed;
 double right_speed;
