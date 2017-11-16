@@ -4,29 +4,29 @@
 
 const int MPU_ADDR = 0x68;
 
-const int SIGNAL_MAX = 255;
+const int SIGNAL_MAX = 255;//working PWM range: 100-255
 const int SIGNAL_MIN = 100;
 const int INITIAL_VALUE = 0;
 
 // Motor pins
-int a1 = 5;
-int a2 = 6;
-int b1 = 10;
-int b2 = 11;
+int a1 = 5;//Left motor forward
+int a2 = 6;//Left motor reverse
+int b1 = 10;//Right motor forward
+int b2 = 21;//Right motor reverse
 
 double left_speed;
 double right_speed;
 
 // PID parameters
-double Kp = 2.5;   // 2.5
+double Kp = 2.5;   // 2.5 //testing required to fine tune PID constants
 double Ki = 0.2;   // 1.0
 double Kd = 8.0;   // 8.0
 double K  = 1.9 * 1.12;
 
 
 // Complimentary Filter parameters
-double K0 = (double) 0.40;
-double K1 = (double) 0.60;
+double K0 = (double) 0.40;//percentage of gyroscopic value influence on final motor output 
+double K1 = (double) 0.60;//percentage of accelerometer/ rotation value's influence on final motor output
 
 int fd;
 int16_t acclX, acclY, acclZ;
@@ -45,7 +45,7 @@ double GUARD_GAIN = 255;
 double error, last_error, integrated_error;
 double pTerm, iTerm, dTerm;
 double angle;
-double angle_offset = 0;  //1.5
+double angle_offset = 0;  //1.5 // used to change initial balancing or manipulating for 
 
 double speed;
 double pid_out;
@@ -56,13 +56,13 @@ unsigned long timer, t, deltaT;
 
 void init_motors()
 {
-
+//setting up the pin functions for both left and right motors
   pinMode(a1, OUTPUT);
   pinMode(a2, OUTPUT);
 
   pinMode(b1, OUTPUT);
   pinMode(b2, OUTPUT);
-  stop_motors();
+  stop_motors();//making sure the segway does not take off immediately from previous instructions sent and never stopped
 }
 
 void stop_motors()
@@ -101,7 +101,7 @@ void read_all()
   Wire.endTransmission(false);
   Wire.requestFrom(MPU_ADDR, 14, true); // request a total of 14 registers
   
-  acclX = Wire.read() << 8 | Wire.read();
+  acclX = Wire.read() << 8 | Wire.read();//appending the full 16 bits of x axis accelerometer data read from the 6DOF
   acclY = Wire.read() << 8 | Wire.read();
   acclZ = Wire.read() << 8 | Wire.read();
 
@@ -112,11 +112,11 @@ void read_all()
   gyroY = Wire.read() << 8 | Wire.read();
   gyroZ = Wire.read() << 8 | Wire.read();
 
-  accl_scaled_x = acclX / 16384.0;
+  accl_scaled_x = acclX / 16384.0;//scaling factor for G value is 16384
   accl_scaled_y = acclY / 16384.0;
   accl_scaled_z = acclZ / 16384.0;
 
-  gyro_scaled_x = gyroX / 131.0;
+  gyro_scaled_x = gyroX / 131.0;//scaling factor to account for accuracy of gyroscope and conversion to radians
   gyro_scaled_y = gyroY / 131.0;
   gyro_scaled_z = gyroZ / 131.0;
 }
@@ -139,21 +139,21 @@ void motors(double speed, double left_offset, double right_offset)
   // left motor
   if (left_speed < 0)  {
     analogWrite(a1, (int) - left_speed);
-    analogWrite(a2, 0);
+    analogWrite(a2, 0);//using a2 as ground
   }
   else if (left_speed > 0)  {
     analogWrite(a2, (int) left_speed);
-    analogWrite(a1, 0);
+    analogWrite(a1, 0);//using a1 as ground
   }
 
   // right motor
   if (right_speed < 0)  {
     analogWrite(b1, (int) - right_speed);
-    analogWrite(b2, 0);
+    analogWrite(b2, 0);//using b2 as ground//using a2 as ground
   }
   else if (right_speed > 0)  {
     analogWrite(b2, (int) right_speed);
-    analogWrite(b1, 0);
+    analogWrite(b1, 0);//using b1 as ground
   }
 }
 
@@ -170,17 +170,17 @@ void pid()
   last_error = error;
   
   pid_out = K * (pTerm + iTerm + dTerm);
-  dir = pid_out / abs(pid_out);
+  dir = pid_out / abs(pid_out);//direction dependent on sign of PID value
 
   if(abs(pid_out) < 30)
   {
-    speed = 0;   
-  }else if(pid_out > 0)
+    speed = 0; //if the PID value is smaller than 30 it is negligible enough to not require rebalancing and thus a zero speed value is asserted
+  }else if(pid_out > 0) 
   {
-    speed = constrain(pid_out, SIGNAL_MIN, SIGNAL_MAX);
+    speed = constrain(pid_out, SIGNAL_MIN, SIGNAL_MAX);//makes sure the output does not go beyond the allowable PWM range
   }else if(pid_out < 0)
   {
-    speed = constrain(pid_out, -SIGNAL_MAX, -SIGNAL_MIN);
+    speed = constrain(pid_out, -SIGNAL_MAX, -SIGNAL_MIN);//makes sure the output does not go beyond the allowable PWM range
   }
   
 }
@@ -196,7 +196,7 @@ void setup() {
 
   init_motors();
 
-  delay(200);
+  delay(200);//
 
   timer = millis();
 
@@ -218,9 +218,9 @@ int i;
 char buffer[100];
 
 void loop() {
-  t = millis();
+  t = millis();//returns milliseconds since arduino board began running current program, current time
   deltaT = (double) (t - timer) / 1000000.0;
-  timer = t;
+  timer = t;//previous time
 
   read_all();
 
