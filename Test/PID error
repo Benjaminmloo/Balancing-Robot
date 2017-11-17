@@ -47,10 +47,11 @@ unsigned long timer, t, deltaT;
 
 void pid()
 {
-  error = last_x - angle_offset;//instead of using last_x- angle offset, we use a manual value
-
+  error = 10;//instead of using last_x- angle offset, we use a manual value
+  integrated_error=30;//completely arbitrary value for testing PID output
+  last_value=8;//arbitrary value for testing
   pTerm = Kp * error;
-
+  
   integrated_error = 0.95 * integrated_error + error;
   iTerm = Ki * integrated_error;
 
@@ -72,9 +73,9 @@ void pid()
   last_error = error;
   
   pid_out = K * (pTerm + iTerm + dTerm);
-  dir = pid_out / abs(pid_out);//direction dependent on sign of PID value
+  //dir = pid_out / abs(pid_out);//direction dependent on sign of PID value
 
-  if(abs(pid_out) < 30)
+  /*if(abs(pid_out) < 30)
   {
     speed = 0; //if the PID value is smaller than 30 it is negligible enough to not require rebalancing and thus a zero speed value is asserted
   }else if(pid_out > 0) 
@@ -83,10 +84,10 @@ void pid()
   }else if(pid_out < 0)
   {
     speed = constrain(pid_out, -SIGNAL_MAX, -SIGNAL_MIN);//makes sure the output does not go beyond the allowable PWM range
-  }
+  }*/
 }
 void test(){
-  if(speed==___){
+  if(pid_out==208.544){
     System.out.println("Test Passed");
     }
   Else{
