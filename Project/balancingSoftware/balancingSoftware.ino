@@ -9,10 +9,10 @@ const int SIGNAL_MIN = 100;
 const int INITIAL_VALUE = 0;
 
 // Motor pins
-int a1 = 5;//Left motor forward
-int a2 = 6;//Left motor reverse
-int b1 = 10;//Right motor forward
-int b2 = 21;//Right motor reverse
+int a1 = 6;
+int a2 = 5;
+int b1 = 11;
+int b2 = 10  ;
 
 double left_speed;
 double right_speed;
@@ -44,8 +44,11 @@ double last_x, last_y;
 double GUARD_GAIN = 255;
 double error, last_error, integrated_error;
 double pTerm, iTerm, dTerm;
+int const memorySize = 5;
+double dMem[memorySize];
+double dAvg;
 double angle;
-double angle_offset = 0;  //1.5 // used to change initial balancing or manipulating for 
+double angle_offset = -5;  //1.5
 
 double speed;
 double pid_out;
@@ -167,6 +170,20 @@ void pid()
   iTerm = Ki * integrated_error;
 
   dTerm = Kd * (error - last_error);
+  dAvg = dTerm;
+  Serial.write("Values: "); Serial.print(dAvg);
+  for(int i = 0; i < memorySize - 1; i ++)
+  {
+    Serial.write(" "); Serial.print(dMem[i]);
+    dAvg += dMem[i];
+    dMem[i] = dMem[i+1];
+  }
+  
+  dAvg += dMem[memorySize - 1];
+  dMem[memorySize - 1] = dTerm;
+
+  dAvg /= memorySize;
+  Serial.write("Average: "); Serial.print(dAvg); Serial.write("\n");
   last_error = error;
   
   pid_out = K * (pTerm + iTerm + dTerm);
@@ -189,7 +206,7 @@ void setup() {
   Serial.begin(9600);
 
   Wire.begin();
-  Wire.beginTransmission(MPU_ADDR);
+   
   Wire.write(0x6B);
   Wire.write(0);
   Wire.endTransmission(true);
@@ -254,7 +271,13 @@ void loop() {
 //
 //  for(int l = 0; l <= i; l++)
 //    Serial.print(buffer[l]);
-  Serial.print(String(speed, DEC) +"\n");  
+
+  Serial.print(error);  Serial.print(", ");
+  Serial.print(speed);  Serial.print(", ");
+  Serial.print(pid_out);  Serial.print(", ");  
+  Serial.print(pTerm);  Serial.print(", ");  
+  Serial.print(iTerm);  Serial.print(", ");  
+  Serial.print(dTerm);  Serial.print("\n");  
   motors(speed, 0.0, 0.0);
 
   delay(10);
