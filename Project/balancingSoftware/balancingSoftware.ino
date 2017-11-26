@@ -21,10 +21,10 @@ double left_speed;
 double right_speed;
 
 // PID parameters - Working parameters
-const double Kp = 2.5;        // 2.5
-const double Ki = 0.2;        // 0.2
-const double Kd = 8;          // 8.0
-const double K  = 1.9 * 1.12; // 1.9*1.12
+const double Kp = 1;        // 2.5
+const double Ki = 0;        // 0.2
+const double Kd = 1;          // 8.0
+const double K  = 2; // 1.9*1.12
 
 
 // Complimentary Filter parameters
@@ -57,7 +57,7 @@ int sampleNum, inc;
 
 boolean pidReadout = true; //print control parameter (error, speed, pid_ouut, P, I, D)
 boolean motionReadout = false;
-int operationMode = 1; //0 run with sensors, 1 run with sample input,2 run with sample input using simulator
+int operationMode = 2; //0 run with sensors, 1 run with sample input,2 run with sample input using simulator
 boolean motorEnable = true;
 
 /*
@@ -235,7 +235,7 @@ void pid()
 
   pTerm = Kp * error;
 
-  integrated_error = 0.95 * integrated_error + error; //integration done by adding values up over time with multiplier to limit the integrator
+  integrated_error = integrated_error + error; //integration done by adding values up over time with multiplier to limit the integrator
   iTerm = Ki * integrated_error;
 
   dTerm = Kd * (error - last_error); //differentiation  done by just finding the difference between the current and the lst error
@@ -263,19 +263,27 @@ void pid()
     Serial.print(pid_out); Serial.print(", ");
     Serial.print(pTerm); Serial.print(", ");
     Serial.print(iTerm); Serial.print(", ");
-    Serial.print(dTerm); Serial.print("\n");
+    Serial.print(dTerm); Serial.print(", ");
   }
 }
 
 
 double theta_a, theta_v, theta_p;
-double M = 10, m = 2, l = 1, g = 9.81;
+double m = 10, b = 1, k = 1;
+double M = 100, g = 9.81, l = 10;
 void sim()
 {
-  theta_a = (pid_out * cos(theta_p) - (M + m) * g * sin(theta_p) + m * l * sin(theta_p) * cos(theta_p) * sq(theta_v)) / (m * l * sq(cos(theta_p)) - (M + m) * l);
+  //theta_a = (10 * pid_out * cos(theta_p) - (M + m) * g * sin(theta_p) + m * l * sin(theta_p) * cos(theta_p) * sq(theta_v)) / (m * l * sq(cos(theta_p)) - (M + m) * l);
+  theta_a = (pid_out / m) - (b / m) * theta_v  - (k / m) * theta_p;
   theta_v += theta_a;
   theta_p += theta_v;
-  angle = theta_p;
+  angle = -theta_p;
+  if (pidReadout)
+  {
+    Serial.print(theta_a); Serial.print(", ");
+    Serial.print(theta_v); Serial.print(", ");
+    Serial.print(theta_p); Serial.print("\n");
+  }
 }
 
 
@@ -296,7 +304,8 @@ void sim()
    gyro_offset_y
    setup for the start of the program
 */
-void setup() {
+void setup()
+{
   Serial.begin(9600);
 
   Wire.begin();
@@ -332,9 +341,10 @@ void setup() {
 
 
 
-void loop() {
+void loop()
+{
 
-  if (operationMode == 0) 
+  if (operationMode == 0)
   {
     t = millis();
     deltaT = (double) (t - timer) / 1000000.0;
@@ -364,33 +374,22 @@ void loop() {
 
   } else if (operationMode >= 1) //Test PID using sample data
   {
-    sampleNum ++;
-    if (sampleNum  < 100 ) //zero-input respose
-    {
-      angle_offset = 0;
-    } else if (sampleNum  < 200 ) // positive step
-    {
-      angle_offset = 10;
-    } else if (sampleNum  < 300 ) // negative step
-    {
-      angle_offset = -10;
-    } else if (sampleNum  == 301 ) //positive ramp
-    {
-      angle_offset = 0;
-    } else if (sampleNum < 350 )
-    {
-      angle_offset ++;
-    } else if (sampleNum  == 351 ) //negative ramp
-    {
-      angle_offset = 0;
-    } else if (sampleNum < 400)
-    {
-      angle_offset --;
-    } else //reset
-    {
-      angle_offset = 0;
-      sampleNum = 0;
-    }
+//    sampleNum ++;
+//    if (sampleNum  < 100 ) //zero-input respose
+//    {
+//      angle_offset = 0;
+//    } else if (sampleNum  < 500 ) // positive step
+//    {
+//      angle_offset = 2;
+//    }  else if(sampleNum < 600) //reset
+//    {
+//      angle_offset = 0;
+//
+//    }else if(sampleNum < 700)
+//    {
+//      sampleNum = 0;
+//    }
+    angle_offset = Serial.read();
     if (operationMode == 2)
       sim();
 
