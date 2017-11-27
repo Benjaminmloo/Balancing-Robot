@@ -1,9 +1,23 @@
-#include <stdio.h>
+//#include <stdio.h>
 #include <stdlib.h>
 #include <Wire.h>
 
 //int const sampleSize = 20;
 //double[sampleSize] sampleData;
+#define IN_SENSOR 0
+#define IN_SIM 1
+
+#define OFFSET_NONE 20
+#define OFFSET_INTERNAL 21
+#define OFFSET_SERIAL 22
+
+
+boolean pidReadout = true; //print control parameter (error, speed, pid_ouut, P, I, D)
+boolean motionReadout = false;
+int operationMode = IN_SIM; 
+int offsetMode = OFFSET_INTERNAL;
+boolean motorEnable = true;
+
 
 const int MPU_ADDR = 0x68;
 
@@ -20,11 +34,17 @@ const int b2 = 10; //motor 2 -ve
 double left_speed;
 double right_speed;
 
-// PID parameters - Working parameters
-const double Kp = 1;        // 2.5
-const double Ki = 0;        // 0.2
-const double Kd = 1;          // 8.0
-const double K  = 2; // 1.9*1.12
+const double I_MAX = 10;
+// PID parameters 
+const double Kp = 2;        // 2.5
+const double Ki = 1;        // 0.2
+const double Kd = 1.5;          // 8.0
+const double K  = 1; // 1.9*1.12
+
+//Simulation parameters 
+double theta_a, theta_v, theta_p;
+double m = 10, b = 5, k = 6;
+double M = 100, g = 9.81, l = 10;
 
 
 // Complimentary Filter parameters
@@ -54,11 +74,6 @@ double dir; //direction the motors should spin
 unsigned long timer, t, deltaT;
 
 int sampleNum, inc;
-
-boolean pidReadout = true; //print control parameter (error, speed, pid_ouut, P, I, D)
-boolean motionReadout = false;
-int operationMode = 2; //0 run with sensors, 1 run with sample input,2 run with sample input using simulator
-boolean motorEnable = true;
 
 /*
    params:void
@@ -235,7 +250,9 @@ void pid()
 
   pTerm = Kp * error;
 
-  integrated_error = integrated_error + error; //integration done by adding values up over time with multiplier to limit the integrator
+  integrated_error = integrated_error + error; //integration done by adding values up over time 
+  if(abs(integrated_error) > I_MAX)
+    integrated_error = I_MAX * (integrated_error / abs(integrated_error));
   iTerm = Ki * integrated_error;
 
   dTerm = Kd * (error - last_error); //differentiation  done by just finding the difference between the current and the lst error
@@ -258,19 +275,15 @@ void pid()
   if (pidReadout)
   {
     Serial.print(angle); Serial.print(", ");
-    Serial.print(error); Serial.print(", ");
-    //Serial.print(speed); Serial.print(", ");
-    Serial.print(pid_out); Serial.print(", ");
-    Serial.print(pTerm); Serial.print(", ");
-    Serial.print(iTerm); Serial.print(", ");
-    Serial.print(dTerm); Serial.print(", ");
+    Serial.print(angle_offset); Serial.print("\n");
+//    Serial.print(pid_out); Serial.print(", ");
+//    Serial.print(pTerm); Serial.print(", ");
+//    Serial.print(iTerm); Serial.print(", ");
+//    Serial.print(dTerm); Serial.print("\n");
   }
 }
 
 
-double theta_a, theta_v, theta_p;
-double m = 10, b = 1, k = 1;
-double M = 100, g = 9.81, l = 10;
 void sim()
 {
   //theta_a = (10 * pid_out * cos(theta_p) - (M + m) * g * sin(theta_p) + m * l * sin(theta_p) * cos(theta_p) * sq(theta_v)) / (m * l * sq(cos(theta_p)) - (M + m) * l);
@@ -278,11 +291,11 @@ void sim()
   theta_v += theta_a;
   theta_p += theta_v;
   angle = -theta_p;
-  if (pidReadout)
+  if ( pidReadout)
   {
-    Serial.print(theta_a); Serial.print(", ");
-    Serial.print(theta_v); Serial.print(", ");
-    Serial.print(theta_p); Serial.print("\n");
+//    Serial.print(theta_a); Serial.print(", ");
+//    Serial.print(theta_v); Serial.print(", ");
+//    Serial.print(theta_p); Serial.print("\n");
   }
 }
 
@@ -344,7 +357,7 @@ void setup()
 void loop()
 {
 
-  if (operationMode == 0)
+  if (operationMode == IN_SENSOR)
   {
     t = millis();
     deltaT = (double) (t - timer) / 1000000.0;
@@ -372,31 +385,32 @@ void loop()
       motorEnable = false;
     }
 
-  } else if (operationMode >= 1) //Test PID using sample data
+  } else if (operationMode == IN_SIM) //Test PID using simulator
   {
-//    sampleNum ++;
-//    if (sampleNum  < 100 ) //zero-input respose
-//    {
-//      angle_offset = 0;
-//    } else if (sampleNum  < 500 ) // positive step
-//    {
-//      angle_offset = 2;
-//    }  else if(sampleNum < 600) //reset
-//    {
-//      angle_offset = 0;
-//
-//    }else if(sampleNum < 700)
-//    {
-//      sampleNum = 0;
-//    }
+    sim();
+  }
+  
+  if (offsetMode == OFFSET_INTERNAL)
+  {
+    sampleNum ++;
+   // Serial.print("\n"); Serial.print(sampleNum); Serial.print("\n");
+    if (sampleNum  < 100 ) //zero-input respose
+    {
+      angle_offset = 0;
+    } else if (sampleNum  < 200 ) // positive step
+    {
+      angle_offset = 2;
+    }  else if (sampleNum < 300) //reset
+    {
+      angle_offset = 0;
+      sampleNum = 0;
+    }
+  } else if (offsetMode == OFFSET_SERIAL)
+  {
     angle_offset = Serial.read();
-    if (operationMode == 2)
-      sim();
-
   }
 
   pid();
-
   if (motorEnable)
     motors(speed, 0.0, 0.0);
 
