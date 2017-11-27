@@ -1,79 +1,88 @@
-//#include <stdio.h>
-#include <stdlib.h>
 #include <Wire.h>
 
-//int const sampleSize = 20;
-//double[sampleSize] sampleData;
+#define SERIAL_SPEED 9600
+#define MPU_ADDR 0x68
+#define DATA_START 0x3B
+#define DATA_SIZE 14
+
 #define IN_SENSOR 0
 #define IN_SIM 1
 
-#define OFFSET_NONE 20
-#define OFFSET_INTERNAL 21
-#define OFFSET_SERIAL 22
+#define REFERENCE_NONE 20
+#define REFERENCE_INTERNAL 21
+#define REFERENCE_SERIAL 22
+
+#define DELAY_LOOP 50
+#define DELAY_INIT 200
 
 
-boolean pidReadout = true; //print control parameter (error, speed, pid_ouut, P, I, D)
-boolean motionReadout = false;
-int operationMode = IN_SIM; 
-int offsetMode = OFFSET_INTERNAL;
+//Program State Parameters
+const boolean PRINT_PID = true; //print control parameter (error, speed, pidOut, P, I, D)
+const boolean PRINT_MOTION = false; //print data from sensor (gX, gY, gZ, aX, aY, aZ)
+const int INPUT_MODE = IN_SIM;
+const int REFERENCE_MODE = REFERENCE_INTERNAL;
+
 boolean motorEnable = true;
 
-
-const int MPU_ADDR = 0x68;
 
 const int SIGNAL_MAX = 255; //max PWM output
 const int SIGNAL_MIN = 100; //min PWM output
 const int INITIAL_VALUE = 0;
 
-// Motor pins
-const int a1 = 6; //motor 1 +ve
-const int a2 = 5; //motor 1 -ve
-const int b1 = 11; //motor 2 +ve
-const int b2 = 10; //motor 2 -ve
+// Motor Parameters
+const int MA1 = 6; //motor 1 +ve
+const int MA2 = 5; //motor 1 -ve
+const int MB1 = 11; //motor 2 +ve
+const int MB2 = 10; //motor 2 -ve
 
 double left_speed;
 double right_speed;
 
-const double I_MAX = 10;
-// PID parameters 
-const double Kp = 2;        // 2.5
-const double Ki = 1;        // 0.2
-const double Kd = 1.5;          // 8.0
-const double K  = 1; // 1.9*1.12
+// PID parameters         //Know working parameters for physical vehicle 
+const double KP = 2;      // 2.5
+const double KI = 1;      // 0.2
+const double KD = 1.5;    // 8.0
+const double K  = 1;      // 1.9*1.12
 
-//Simulation parameters 
-double theta_a, theta_v, theta_p;
-double m = 10, b = 5, k = 6;
-double M = 100, g = 9.81, l = 10;
+const double I_MAX = 10;
+double angleReference = 0;  //1.5
+
+double error, lastError, integratedError; //last error and integrated error used by D I portions of PID respectively
+double pTerm, iTerm, dTerm;
+double dir; //direction the motors should spin
+double angle; //The angle value that the PID is given
+
+double speed; //pwm value given to motors
+double pidOut; //out signal of the motors
+
+//Simulation parameters
+double simA = 0, simV = 0, simP = 0; //simulation acceleration velocity and position
+double m = 10, b = 5, k = 6; //spring-damper-mass system variables
+double M = 100, g = 9.81, l = 10; //pendulum system variables
 
 
 // Complimentary Filter parameters
 const double K0 = (double) 0.40; //gyro weight
 const double K1 = (double) 0.60; //accl weight
 
-int16_t acclX, acclY, acclZ; //raw values from sensor
-int16_t gyroX, gyroY, gyroZ;
-double accl_scaled_x, accl_scaled_y, accl_scaled_z; //scaled to m/s and degrees/minute respictively
-double gyro_scaled_x, gyro_scaled_y, gyro_scaled_z;
+//Motion Values
+int16_t acclRawX, acclRawY, acclRawZ; //raw values from sensor
+int16_t gyroRawX, gyroRawY, gyroRawZ;
+double acclScaledX, acclScaledY, acclScaledZ; //scaled to m/s and degrees/minute respictively
+double gyroScaledX, gyroScaledY, gyroScaledZ;
 
+double gyroOffsetX, gyroOffsetY; //Initial gyro reading to offset any error in the sensor
+double gyroDeltaX, gyroDeltaY; //The change rotation position calculated with (change in time) * (angular velocity)
+double acclRotationX, acclRotationY; //rotation value calculated from accelerometer
+double rotationX, rotationY; //rotation value used by PID to calculate error / weighted between accl and gyro values
 
-double gyro_offset_x, gyro_offset_y; //Initial gyro reading to offset any error in the sensor
-double gyro_x_delta, gyro_y_delta; //The change rotation position calculated with (change in time) * (angular velocity)
-double accl_rot_x, accl_rot_y; //rotation value calculated from accelerometer
-double rotation_x, rotation_y; //rotation value used by PID to calculate error / weighted between accl and gyro values
-
-double error, last_error, integrated_error; //last error and integrated error used by D I portions of PID respectively
-double pTerm, iTerm, dTerm;
-double angle; //The angle value that the PID is given
-double angle_offset = 0;  //1.5
-
-double speed; //pwm value given to motors
-double pid_out; //out signal of the motors
-double dir; //direction the motors should spin
-
+//Time Parameters
 unsigned long timer, t, deltaT;
 
-int sampleNum, inc;
+//Sample Data Parameters
+int sampleNum;
+
+
 
 /*
    params:void
@@ -81,15 +90,15 @@ int sampleNum, inc;
 
    Initialize motor pins
 */
-void init_motors()
+void initMotors()
 {
 
-  pinMode(a1, OUTPUT);
-  pinMode(a2, OUTPUT);
+  pinMode(MA1, OUTPUT);
+  pinMode(MA2, OUTPUT);
 
-  pinMode(b1, OUTPUT);
-  pinMode(b2, OUTPUT);
-  stop_motors();
+  pinMode(MB1, OUTPUT);
+  pinMode(MB2, OUTPUT);
+  stopMotors();
 }
 
 /*
@@ -99,13 +108,13 @@ void init_motors()
    stops motor signal
    by setting pins to 0
 */
-void stop_motors()
+void stopMotors()
 {
-  digitalWrite(a1, LOW);
-  digitalWrite(a2, LOW);
+  digitalWrite(MA1, LOW);
+  digitalWrite(MA2, LOW);
 
-  digitalWrite(b1, LOW);
-  digitalWrite(b2, LOW);
+  digitalWrite(MB1, LOW);
+  digitalWrite(MB2, LOW);
 
 }
 
@@ -131,7 +140,7 @@ double dist(double a, double b)
 
    Aproximates y rotation position using accelerometer values
 */
-double get_y_rotation(double x, double y, double z)
+double calcRotationY(double x, double y, double z)
 {
   double radians;
   radians = atan2(x, dist(y, z));
@@ -147,7 +156,7 @@ double get_y_rotation(double x, double y, double z)
 
    Aproximates x rotation position using accelerometer values
 */
-double get_x_rotation(double x, double y, double z)
+double calcRotationX(double x, double y, double z)
 {
   double radians;
   radians = atan2(y, dist(x, z));
@@ -157,41 +166,44 @@ double get_x_rotation(double x, double y, double z)
 
 /*
   Reads all of the relavent data regesters from the MPU 6050 and scales the values to real world units(m/s degrees/minute)
+  outputs to global variables (gyro/accl, raw/scalled, x/y/x)
 */
-void read_all()
+void readAll()
 {
-  Wire.beginTransmission(MPU_ADDR);
-  Wire.write(0x3B); //write to the firstrelevant register to start reading from there
-  Wire.endTransmission(false); //
-  Wire.requestFrom(MPU_ADDR, 14, true); // request a total of 14 registers
+  do
+  {
+    Wire.beginTransmission(MPU_ADDR);
+    Wire.write(DATA_START); //write to the firstrelevant register to start reading from there
+    Wire.endTransmission(false); //
+  } while (Wire.requestFrom(MPU_ADDR, DATA_SIZE, true) == DATA_SIZE); //request a total of 14 registers retry if not all are returned
 
-  acclX = Wire.read() << 8 | Wire.read();
-  acclY = Wire.read() << 8 | Wire.read();
-  acclZ = Wire.read() << 8 | Wire.read();
+  acclRawX = Wire.read() << 8 | Wire.read();
+  acclRawY = Wire.read() << 8 | Wire.read();
+  acclRawZ = Wire.read() << 8 | Wire.read();
 
   Wire.read();
   Wire.read(); //read through unnused values
 
-  gyroX = Wire.read() << 8 | Wire.read();
-  gyroY = Wire.read() << 8 | Wire.read();
-  gyroZ = Wire.read() << 8 | Wire.read();
+  gyroRawX = Wire.read() << 8 | Wire.read();
+  gyroRawY = Wire.read() << 8 | Wire.read();
+  gyroRawZ = Wire.read() << 8 | Wire.read();
 
-  accl_scaled_x = acclX / 16384.0;
-  accl_scaled_y = acclY / 16384.0;
-  accl_scaled_z = acclZ / 16384.0;
+  acclScaledX = acclRawX / 16384.0;
+  acclScaledY = acclRawY / 16384.0;
+  acclScaledZ = acclRawZ / 16384.0;
 
-  gyro_scaled_x = gyroX / 131.0;
-  gyro_scaled_y = gyroY / 131.0;
-  gyro_scaled_z = gyroZ / 131.0;
+  gyroScaledX = gyroRawX / 131.0;
+  gyroScaledY = gyroRawY / 131.0;
+  gyroScaledZ = gyroRawZ / 131.0;
 
-  if (motionReadout)
+  if (PRINT_MOTION)
   {
-    Serial.print(accl_scaled_x); Serial.print(", ");
-    Serial.print(accl_scaled_y); Serial.print(", ");
-    Serial.print(accl_scaled_x); Serial.print(", ");
-    Serial.print(gyro_scaled_x); Serial.print(", ");
-    Serial.print(gyro_scaled_y); Serial.print(", ");
-    Serial.print(gyro_scaled_z); Serial.print("\n");
+    Serial.print(acclScaledX); Serial.print(", ");
+    Serial.print(acclScaledY); Serial.print(", ");
+    Serial.print(acclScaledX); Serial.print(", ");
+    Serial.print(gyroScaledX); Serial.print(", ");
+    Serial.print(gyroScaledY); Serial.print(", ");
+    Serial.print(gyroScaledZ); Serial.print("\n");
   }
 }
 
@@ -217,203 +229,200 @@ void motors(double speed, double left_offset, double right_offset)
 
   // left motor
   if (left_speed < 0)  {
-    analogWrite(a1, (int) - left_speed);
-    analogWrite(a2, 0);
+    analogWrite(MA1, (int) - left_speed);
+    analogWrite(MA2, 0);
   }
   else if (left_speed > 0)  {
-    analogWrite(a2, (int) left_speed);
-    analogWrite(a1, 0);
+    analogWrite(MA2, (int) left_speed);
+    analogWrite(MA1, 0);
   }
 
   // right motor
   if (right_speed < 0)  {
-    analogWrite(b1, (int) - right_speed);
-    analogWrite(b2, 0);
+    analogWrite(MB1, (int) - right_speed);
+    analogWrite(MB2, 0);
   }
   else if (right_speed > 0)  {
-    analogWrite(b2, (int) right_speed);
-    analogWrite(b1, 0);
+    analogWrite(MB2, (int) right_speed);
+    analogWrite(MB1, 0);
   }
 }
 
 /*
-   uses external values fromqw:
+   uses external values from:
    angle
-   angle_offset
+   angleReference
    kp, ki, kd
 
    PID controller used to create out put to balance the vehicle
 */
 void pid()
 {
-  error = angle - angle_offset;
+  error = angle - angleReference;
 
-  pTerm = Kp * error;
+  pTerm = KP * error;
 
-  integrated_error = integrated_error + error; //integration done by adding values up over time 
-  if(abs(integrated_error) > I_MAX)
-    integrated_error = I_MAX * (integrated_error / abs(integrated_error));
-  iTerm = Ki * integrated_error;
+  integratedError = integratedError + error; //integration done by adding values up over time
+  if (abs(integratedError) > I_MAX)
+    integratedError = I_MAX * (integratedError / abs(integratedError));
+  iTerm = KI * integratedError;
 
-  dTerm = Kd * (error - last_error); //differentiation  done by just finding the difference between the current and the lst error
-  last_error = error;
+  dTerm = KD * (error - lastError); //differentiation  done by just finding the difference between the current and the lst error
+  lastError = error;
 
-  pid_out = K * (pTerm + iTerm + dTerm);
-  dir = pid_out / abs(pid_out);
+  pidOut = K * (pTerm + iTerm + dTerm);
+  dir = pidOut / abs(pidOut);
 
-  if (abs(pid_out) < 30) //limit the out put too -255 to -100, 0, 100 to 255
+  if (abs(pidOut) < 30) //limit the out put too -255 to -100, 0, 100 to 255
   {
     speed = 0;
-  } else if (pid_out > 0)
+  } else if (pidOut > 0)
   {
-    speed = constrain(pid_out, SIGNAL_MIN, SIGNAL_MAX);
-  } else if (pid_out < 0)
+    speed = constrain(pidOut, SIGNAL_MIN, SIGNAL_MAX);
+  } else if (pidOut < 0)
   {
-    speed = constrain(pid_out, -SIGNAL_MAX, -SIGNAL_MIN);
+    speed = constrain(pidOut, -SIGNAL_MAX, -SIGNAL_MIN);
   }
 
-  if (pidReadout)
+  if (PRINT_PID)
   {
     Serial.print(angle); Serial.print(", ");
-    Serial.print(angle_offset); Serial.print("\n");
-//    Serial.print(pid_out); Serial.print(", ");
-//    Serial.print(pTerm); Serial.print(", ");
-//    Serial.print(iTerm); Serial.print(", ");
-//    Serial.print(dTerm); Serial.print("\n");
+    Serial.print(angleReference); Serial.print("\n");
+    //    Serial.print(pidOut); Serial.print(", ");
+    //    Serial.print(pTerm); Serial.print(", ");
+    //    Serial.print(iTerm); Serial.print(", ");
+    //    Serial.print(dTerm); Serial.print("\n");
   }
 }
 
-
+/*
+ * simulates the motion of some real system
+ * acceleration is calculated based on the real system
+ * velocity and position are integrals and second integrals of that in the form of a summer
+ */
 void sim()
 {
-  //theta_a = (10 * pid_out * cos(theta_p) - (M + m) * g * sin(theta_p) + m * l * sin(theta_p) * cos(theta_p) * sq(theta_v)) / (m * l * sq(cos(theta_p)) - (M + m) * l);
-  theta_a = (pid_out / m) - (b / m) * theta_v  - (k / m) * theta_p;
-  theta_v += theta_a;
-  theta_p += theta_v;
-  angle = -theta_p;
-  if ( pidReadout)
+  //TODO 
+  //create switch for different simulations. get inverted pendulum simmulation working
+  //simA = (10 * pidOut * cos(simP) - (M + m) * g * sin(simP) + m * l * sin(simP) * cos(simP) * sq(simV)) / (m * l * sq(cos(simP)) - (M + m) * l);
+  simA = (pidOut / m) - (b / m) * simV  - (k / m) * simP;
+  simV += simA;
+  simP += simV;
+  angle = -simP;
+  if (PRINT_PID)
   {
-//    Serial.print(theta_a); Serial.print(", ");
-//    Serial.print(theta_v); Serial.print(", ");
-//    Serial.print(theta_p); Serial.print("\n");
+    //    Serial.print(simA); Serial.print(", ");
+    //    Serial.print(simV); Serial.print(", ");
+    //    Serial.print(simP); Serial.print("\n");
   }
 }
 
 
 /*
-   Initiates:
-   inc
-   sampleNum
-   timer
-   deltaT
-   read_all()
-    int16_t acclX, acclY, acclZ; //raw values from sensor
-    int16_t gyroX, gyroY, gyroZ;
-    accl_scaled_x, accl_scaled_y, accl_scaled_z; //scaled to m/s and degrees/minute respictively
-    Gyro_scaled_x, gyro_scaled_y, gyro_scaled_z
-   rotation_x
-   rotation_y
-   gyro_offset_x
-   gyro_offset_y
-   setup for the start of the program
-*/
+ *  setup for the start of the program
+ *  initiates connection to external devices
+ *  intialises variable that are based in the systems physical state (motion / time)
+ */
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(SERIAL_SPEED);
 
   Wire.begin();
-  Wire.beginTransmission(MPU_ADDR);
-  Wire.write(0x6B);
-  Wire.write(0);  //turn off "sleep" register
-  Wire.endTransmission(true);
+  do {
+    Wire.beginTransmission(MPU_ADDR);
+    Wire.write(0x6B);
+    Wire.write(0);   //turn off "sleep" register
+  } while (Wire.endTransmission(true)); //loop if there is an error
 
 
-  //initiate all necesary variables
-  init_motors();
-
-  delay(200);
-
-  inc = 0;
+  initMotors();
+  delay(DELAY_LOOP); //delay to let system settle
+  
   sampleNum = 0;
-
+  
   timer = millis();
-
   deltaT = (double) (millis() - timer) / 1000000.0;
-  read_all();
+  
+  readAll();
 
-  rotation_x = get_x_rotation(accl_scaled_x, accl_scaled_y, accl_scaled_z);
-  rotation_y = get_y_rotation(accl_scaled_x, accl_scaled_y, accl_scaled_z);
+  rotationX = calcRotationX(acclScaledX, acclScaledY, acclScaledZ); //set initial position based purely on accl values
+  rotationY = calcRotationY(acclScaledX, acclScaledY, acclScaledZ);
 
-  gyro_offset_x = gyro_scaled_x;
-  gyro_offset_y = gyro_scaled_y;
-
-  theta_p = 0;
-  theta_a = 0;
-  theta_v = 0;
+  gyroOffsetX = gyroScaledX; //sets error in gyro values as the initial angular velosity
+  gyroOffsetY = gyroScaledY; //HOLD VEHICLE STILL WHEN STARTING if this sin't done offset will be wrong
 }
 
 
-
+/*
+ * Main control loop. 
+ * Gets input signal, runs PID control, sends output to system
+ */
 void loop()
 {
 
-  if (operationMode == IN_SENSOR)
+  //get input based from specified source
+  if (INPUT_MODE == IN_SENSOR) 
   {
+    //calculate time from last loop
     t = millis();
     deltaT = (double) (t - timer) / 1000000.0;
     timer = t;
 
-    read_all();
+    readAll();
 
-    gyro_scaled_x -= gyro_offset_x;
-    gyro_scaled_y -= gyro_offset_y;
+    gyroScaledX -= gyroOffsetX; //adjust gyro values based on initial error
+    gyroScaledY -= gyroOffsetY;
 
-    gyro_x_delta = (gyro_scaled_x * deltaT);
-    gyro_y_delta = (gyro_scaled_y * deltaT);
+    gyroDeltaX = (gyroScaledX * deltaT); //find theoretical change in rotational position
+    gyroDeltaY = (gyroScaledY * deltaT);
 
-    accl_rot_x = get_x_rotation(accl_scaled_x, accl_scaled_y, accl_scaled_z);
-    accl_rot_y = get_y_rotation(accl_scaled_x, accl_scaled_y, accl_scaled_z);
+    acclRotationX = calcRotationX(acclScaledX, acclScaledY, acclScaledZ); //calculate rotational position based on accelerometer
+    acclRotationY = calcRotationY(acclScaledX, acclScaledY, acclScaledZ);
 
-    rotation_x = K0 * (rotation_x + gyro_x_delta) + (K1 * accl_rot_x);
-    rotation_y = K0 * (rotation_y + gyro_y_delta) + (K1 * accl_rot_y);
+    rotationX = K0 * (rotationX + gyroDeltaX) + (K1 * acclRotationX);  //weight the values calculated from gyro and accelerometer
+    rotationY = K0 * (rotationY + gyroDeltaY) + (K1 * acclRotationY);  //gyro rotation position is calculated by summing all deltas
 
-    angle = rotation_x;
+    angle = rotationX;
 
-    if (rotation_y < -60.0 || rotation_y > 60.0)
+    if (rotationY < -60.0 || rotationY > 60.0) //If vehicle is flipped over Y axis turn off the motors
     {
-      stop_motors();
+      stopMotors();
       motorEnable = false;
     }
 
-  } else if (operationMode == IN_SIM) //Test PID using simulator
+  } else if (INPUT_MODE == IN_SIM) //Test PID using simulator
   {
     sim();
   }
-  
-  if (offsetMode == OFFSET_INTERNAL)
+
+  //decide where reference angle is retreived from
+  if (REFERENCE_MODE == REFERENCE_INTERNAL) //loop of sample data, can be changed to reflect any kind of input
+                                            //currently the sample is a square wave
   {
     sampleNum ++;
-   // Serial.print("\n"); Serial.print(sampleNum); Serial.print("\n");
-    if (sampleNum  < 100 ) //zero-input respose
+    if (sampleNum  < 100 ) //zero-input 
     {
-      angle_offset = 0;
+      angleReference = 0;
     } else if (sampleNum  < 200 ) // positive step
     {
-      angle_offset = 2;
+      angleReference = 2;
     }  else if (sampleNum < 300) //reset
     {
-      angle_offset = 0;
+      angleReference = 0;
       sampleNum = 0;
     }
-  } else if (offsetMode == OFFSET_SERIAL)
+  } else if (REFERENCE_MODE == REFERENCE_SERIAL)
   {
-    angle_offset = Serial.read();
+    angleReference = Serial.read();
+    if(abs(angleReference) > 180)
+      angleReference = 0;
   }
 
   pid();
+  
   if (motorEnable)
     motors(speed, 0.0, 0.0);
 
-  delay(50);
+  delay(DELAY_LOOP);
 }
 
