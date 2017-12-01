@@ -77,19 +77,22 @@ public class Server {
 	
 	public static void processReceived (String str)
 	{
-
-			println( "process string: "+str +"\n") ;
-		if (str.equals("w")) {callSerialWrite("w");println("calling w"+"\n");}
-		else if (str.equals("a")) {callSerialWrite("a");println("calling a"+"\n");}
-		else if (str.equals("d")) {callSerialWrite("d");println("calling d"+"\n");}
-		else if (str.equals("s")) {callSerialWrite("s");println("calling s"+"\n");}
-		else if (str.equals("e")) {callSerialWrite("e");println("calling e"+"\n");}
-		else {println( "case match failed, string ="+str +"\n") ;}
+		if (str.equals("w")) callSerialWrite("w");
+		if (str.equals("a")) callSerialWrite("a");
+		if (str.equals("d")) callSerialWrite("d");
+		if (str.equals("s")) callSerialWrite("s");
+		if (str.equals("e")) callSerialWrite("e");
+		if (str.equals("f")) callSerialWrite("f");
+		if (str.equals("b")) callSerialWrite("b");
+		if (str.equals("l")) callSerialWrite("l");
+		if (str.equals("r")) callSerialWrite("r");
+		
+		if (str.equals("+")) callSerialWrite("+");
+		if (str.equals("-")) callSerialWrite("-");
 	}
 	
 	public static void callSerialWrite( String id )
 	{
-		println( "callSerialWrite id= "+id +"\n") ;
 		String cmd = "python serial_"+id+".py";
 
 		String[] env = {"PATH=/bin:/usr/bin/"};
