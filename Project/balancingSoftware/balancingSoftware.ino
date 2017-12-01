@@ -26,7 +26,7 @@ boolean motorEnable = true;
 
 
 const int SIGNAL_MAX = 255; //max PWM output
-const int SIGNAL_MIN = 100; //min PWM output
+const int SIGNAL_MIN = 50; //min PWM output
 const int INITIAL_VALUE = 0;
 
 // Motor Parameters
@@ -438,7 +438,8 @@ void loop()
         angleReference = 0;
         leftOffset = -75;
         rightOffset = 75;
-        break; 
+        break;
+        
         
     }
 
