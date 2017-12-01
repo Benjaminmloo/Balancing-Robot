@@ -19,10 +19,10 @@
 //Program State Parameters
 const boolean PRINT_PID = true; //print control parameter (error, speed, pidOut, P, I, D)
 const boolean PRINT_MOTION = false; //print data from sensor (gX, gY, gZ, aX, aY, aZ)
-const int INPUT_MODE = IN_SIM;
-const int REFERENCE_MODE = REFERENCE_INTERNAL;
+const int INPUT_MODE = IN_SENSOR;
+const int REFERENCE_MODE = REFERENCE_SERIAL;
 
-boolean motorEnable = true;
+boolean motorEnable = false;
 
 
 const int SIGNAL_MAX = 255; //max PWM output
@@ -35,17 +35,18 @@ const int MA2 = 5; //motor 1 -ve
 const int MB1 = 11; //motor 2 +ve
 const int MB2 = 10; //motor 2 -ve
 
-double left_speed;
-double right_speed;
+double left_speed, leftOffset;
+double right_speed, rightOffset;
 
-// PID parameters         //Know working parameters for physical vehicle 
-const double KP = 2;      // 2.5
-const double KI = 1;      // 0.2
-const double KD = 1.5;    // 8.0
-const double K  = 1;      // 1.9*1.12
+// PID parameters         //Know working parameters for physical vehicle
+const double KP = 2.5 ;      // 2.5
+const double KI = .2;      // 0.2
+const double KD = 8;    // 8.0
+const double K  = 1.9 * 1.12;    // 1.9*1.12
 
-const double I_MAX = 10;
+const double I_MAX = 200 / KI;
 double angleReference = 0;  //1.5
+double angleOffset = 0;
 
 double error, lastError, integratedError; //last error and integrated error used by D I portions of PID respectively
 double pTerm, iTerm, dTerm;
@@ -175,7 +176,7 @@ void readAll()
     Wire.beginTransmission(MPU_ADDR);
     Wire.write(DATA_START); //write to the firstrelevant register to start reading from there
     Wire.endTransmission(false); //
-  } while (Wire.requestFrom(MPU_ADDR, DATA_SIZE, true) == DATA_SIZE); //request a total of 14 registers retry if not all are returned
+  } while (Wire.requestFrom(MPU_ADDR, DATA_SIZE, true) != DATA_SIZE); //request a total of 14 registers retry if not all are returned
 
   acclRawX = Wire.read() << 8 | Wire.read();
   acclRawY = Wire.read() << 8 | Wire.read();
@@ -258,7 +259,7 @@ void motors(double speed, double left_offset, double right_offset)
 */
 void pid()
 {
-  error = angle - angleReference;
+  error = angle - angleReference + angleOffset;
 
   pTerm = KP * error;
 
@@ -287,22 +288,23 @@ void pid()
   if (PRINT_PID)
   {
     Serial.print(angle); Serial.print(", ");
-    Serial.print(angleReference); Serial.print("\n");
-    //    Serial.print(pidOut); Serial.print(", ");
-    //    Serial.print(pTerm); Serial.print(", ");
-    //    Serial.print(iTerm); Serial.print(", ");
-    //    Serial.print(dTerm); Serial.print("\n");
+    Serial.print(angleReference); Serial.print(", ");
+    Serial.print(speed); Serial.print(", ");
+    Serial.print(pidOut); Serial.print(", ");
+    Serial.print(pTerm); Serial.print(", ");
+    Serial.print(iTerm); Serial.print(", ");
+    Serial.print(dTerm); Serial.print("\n");
   }
 }
 
 /*
- * simulates the motion of some real system
- * acceleration is calculated based on the real system
- * velocity and position are integrals and second integrals of that in the form of a summer
- */
+   simulates the motion of some real system
+   acceleration is calculated based on the real system
+   velocity and position are integrals and second integrals of that in the form of a summer
+*/
 void sim()
 {
-  //TODO 
+  //TODO
   //create switch for different simulations. get inverted pendulum simmulation working
   //simA = (10 * pidOut * cos(simP) - (M + m) * g * sin(simP) + m * l * sin(simP) * cos(simP) * sq(simV)) / (m * l * sq(cos(simP)) - (M + m) * l);
   simA = (pidOut / m) - (b / m) * simV  - (k / m) * simP;
@@ -319,10 +321,10 @@ void sim()
 
 
 /*
- *  setup for the start of the program
- *  initiates connection to external devices
- *  intialises variable that are based in the systems physical state (motion / time)
- */
+    setup for the start of the program
+    initiates connection to external devices
+    intialises variable that are based in the systems physical state (motion / time)
+*/
 void setup()
 {
   Serial.begin(SERIAL_SPEED);
@@ -337,12 +339,12 @@ void setup()
 
   initMotors();
   delay(DELAY_LOOP); //delay to let system settle
-  
+
   sampleNum = 0;
-  
+
   timer = millis();
   deltaT = (double) (millis() - timer) / 1000000.0;
-  
+
   readAll();
 
   rotationX = calcRotationX(acclScaledX, acclScaledY, acclScaledZ); //set initial position based purely on accl values
@@ -354,14 +356,14 @@ void setup()
 
 
 /*
- * Main control loop. 
- * Gets input signal, runs PID control, sends output to system
- */
+   Main control loop.
+   Gets input signal, runs PID control, sends output to system
+*/
 void loop()
 {
 
   //get input based from specified source
-  if (INPUT_MODE == IN_SENSOR) 
+  if (INPUT_MODE == IN_SENSOR)
   {
     //calculate time from last loop
     t = millis();
@@ -397,15 +399,15 @@ void loop()
 
   //decide where reference angle is retreived from
   if (REFERENCE_MODE == REFERENCE_INTERNAL) //loop of sample data, can be changed to reflect any kind of input
-                                            //currently the sample is a square wave
+    //currently the sample is a square wave
   {
     sampleNum ++;
-    if (sampleNum  < 100 ) //zero-input 
+    if (sampleNum  < 100 ) //zero-input
     {
       angleReference = 0;
     } else if (sampleNum  < 200 ) // positive step
     {
-      angleReference = 2;
+      angleReference = 20;
     }  else if (sampleNum < 300) //reset
     {
       angleReference = 0;
@@ -413,15 +415,38 @@ void loop()
     }
   } else if (REFERENCE_MODE == REFERENCE_SERIAL)
   {
-    angleReference = Serial.read();
-    if(abs(angleReference) > 180)
+    int in = Serial.read();
+    switch (in)
+    {
+      case 'w':
+        angleReference = 15;
+        break;
+      case 's':
+        angleReference = -15;
+        break;
+      case 'a':
+        leftOffset = 75;
+        rightOffset = -75;
+      case 'e':  
+        angleReference = 0;
+        leftOffset = 0;
+        rightOffset = 0;
+        break;
+      case 'd':
+        leftOffset = -75;
+        rightOffset = 75;
+        break;
+        
+    }
+
+    if (abs(angleReference) > 180)
       angleReference = 0;
-  }
+  } else if (REFERENCE_MODE == REFERENCE_NONE);
 
   pid();
-  
+
   if (motorEnable)
-    motors(speed, 0.0, 0.0);
+    motors(speed, leftOffset, rightOffset);
 
   delay(DELAY_LOOP);
 }
