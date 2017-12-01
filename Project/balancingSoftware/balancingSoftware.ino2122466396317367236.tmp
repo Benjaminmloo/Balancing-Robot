@@ -19,8 +19,8 @@
 //Program State Parameters
 const boolean PRINT_PID = true; //print control parameter (error, speed, pidOut, P, I, D)
 const boolean PRINT_MOTION = false; //print data from sensor (gX, gY, gZ, aX, aY, aZ)
-const int INPUT_MODE = IN_SENSOR;
-const int REFERENCE_MODE = REFERENCE_SERIAL;
+const int INPUT_MODE = IN_SIM;
+const int REFERENCE_MODE = REFERENCE_INTERNAL;
 
 boolean motorEnable = true;
 
@@ -35,18 +35,17 @@ const int MA2 = 5; //motor 1 -ve
 const int MB1 = 11; //motor 2 +ve
 const int MB2 = 10; //motor 2 -ve
 
-double left_speed, leftOffset;
-double right_speed, rightOffset;
+double left_speed;
+double right_speed;
 
 // PID parameters         //Know working parameters for physical vehicle
-const double KP = 2.5 ;      // 2.5
-const double KI = .2;      // 0.2
-const double KD = 8;    // 8.0
-const double K  = 1.9 * 1.12;    // 1.9*1.12
+const double KP = 2;      // 2.5
+const double KI = 1;      // 0.2
+const double KD = 1.5;    // 8.0
+const double K  = 1;      // 1.9*1.12
 
-const double I_MAX = 200 / KI;
+const double I_MAX = 10;
 double angleReference = 0;  //1.5
-double angleOffset = 0;
 
 double error, lastError, integratedError; //last error and integrated error used by D I portions of PID respectively
 double pTerm, iTerm, dTerm;
@@ -171,12 +170,10 @@ double calcRotationX(double x, double y, double z)
 */
 void readAll()
 {
-  do
-  {
-    Wire.beginTransmission(MPU_ADDR);
-    Wire.write(DATA_START); //write to the firstrelevant register to start reading from there
-    Wire.endTransmission(false); //
-  } while (Wire.requestFrom(MPU_ADDR, DATA_SIZE, true) != DATA_SIZE); //request a total of 14 registers retry if not all are returned
+
+  Wire.beginTransmission(MPU_ADDR);
+  Wire.write(DATA_START); //write to the firstrelevant register to start reading from there
+  Wire.endTransmission(false); //
 
   acclRawX = Wire.read() << 8 | Wire.read();
   acclRawY = Wire.read() << 8 | Wire.read();
@@ -259,7 +256,7 @@ void motors(double speed, double left_offset, double right_offset)
 */
 void pid()
 {
-  error = angle - angleReference + angleOffset;
+  error = angle - angleReference;
 
   pTerm = KP * error;
 
@@ -288,12 +285,11 @@ void pid()
   if (PRINT_PID)
   {
     Serial.print(angle); Serial.print(", ");
-    Serial.print(angleReference); Serial.print(", ");
-    Serial.print(speed); Serial.print(", ");
-    Serial.print(pidOut); Serial.print(", ");
-    Serial.print(pTerm); Serial.print(", ");
-    Serial.print(iTerm); Serial.print(", ");
-    Serial.print(dTerm); Serial.print("\n");
+    Serial.print(angleReference); Serial.print("\n");
+    //    Serial.print(pidOut); Serial.print(", ");
+    //    Serial.print(pTerm); Serial.print(", ");
+    //    Serial.print(iTerm); Serial.print(", ");
+    //    Serial.print(dTerm); Serial.print("\n");
   }
 }
 
@@ -407,7 +403,7 @@ void loop()
       angleReference = 0;
     } else if (sampleNum  < 200 ) // positive step
     {
-      angleReference = 20;
+      angleReference = 2;
     }  else if (sampleNum < 300) //reset
     {
       angleReference = 0;
@@ -415,41 +411,15 @@ void loop()
     }
   } else if (REFERENCE_MODE == REFERENCE_SERIAL)
   {
-    int in = Serial.read();
-    switch (in)
-    {
-      case 'w':
-        angleReference = 15;
-        break;
-      case 's':
-        angleReference = -15;
-        break;
-      case 'a':
-        angleReference = 0;
-        leftOffset = 75;
-        rightOffset = -75;
-        break;
-      case 'e':  
-        angleReference = 0;
-        leftOffset = 0;
-        rightOffset = 0;
-        break;
-      case 'd':
-        angleReference = 0;
-        leftOffset = -75;
-        rightOffset = 75;
-        break; 
-        
-    }
-
+    angleReference = Serial.read();
     if (abs(angleReference) > 180)
       angleReference = 0;
-  } else if (REFERENCE_MODE == REFERENCE_NONE);
+  }
 
   pid();
 
   if (motorEnable)
-    motors(speed, leftOffset, rightOffset);
+    motors(speed, 0.0, 0.0);
 
   delay(DELAY_LOOP);
 }
